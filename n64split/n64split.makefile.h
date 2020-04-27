@@ -7,7 +7,7 @@ static const char makefile_data[] =
 "BUILD_DIR = build\n"
 "\n"
 "##################### Compiler Options #######################\n"
-"CROSS = mipsel-elf-\n"
+"CROSS = mips-linux-gnu-\n"
 "AS = $(CROSS)as\n"
 "CC = $(CROSS)gcc\n"
 "LD = $(CROSS)ld\n"

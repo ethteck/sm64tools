@@ -485,7 +485,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
             || strncmp(insn->mnemonic,"cle_s.",6) == 0 || strncmp(insn->mnemonic,"bz.",3) == 0 || strncmp(insn->mnemonic,"msub.",5) == 0
             || strncmp(insn->mnemonic,"shrav.",5) == 0 || strncmp(insn->mnemonic,"din",3) == 0 || strncmp(insn->mnemonic,"cins",4) == 0
             || strncmp(insn->mnemonic,"st.",3) == 0 || strncmp(insn->mnemonic,"shra",4) == 0 || strncmp(insn->mnemonic,"dextm",5) == 0
-            || strncmp(insn->mnemonic,"srl.",4) == 0 || strncmp(insn->mnemonic,"bc1",3) == 0 || strncmp(insn->mnemonic,"sra.",4) == 0
+            || strncmp(insn->mnemonic,"srl.",4) == 0 || strncmp(insn->mnemonic,"sra.",4) == 0
             || strncmp(insn->mnemonic,"fmul.",4) == 0 || strncmp(insn->mnemonic,"dextu",5) == 0
             )
             {
