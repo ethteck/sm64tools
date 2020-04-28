@@ -314,23 +314,44 @@ void generate_ld_script(arg_config *args, rom_config *config)
 "   /* header and boot */\n"
 "   .header 0x0 : AT(0x0) {\n"
 "      * (.header);\n"
-"      * (.boot);\n"
 "   }\n"
 "\n", config->name, N64SPLIT_VERSION);
    for (int i = 0; i < config->section_count; i++) {
       split_section *s = &config->sections[i];
+      unsigned int rom_start = s->start;
+      unsigned int rom_end = s->end;
+      unsigned int ram_start = s->vaddr;
+      unsigned int length = rom_end - rom_start;
       if (s->type == TYPE_ASM) {
-         unsigned int rom_start = s->start;
-         unsigned int rom_end = s->end;
-         unsigned int ram_start = s->vaddr;
-         unsigned int length = rom_end - rom_start;
          fprintf(fld,
-"   /* 0x%08X %06X-%06X [%X] */\n"
-"   .text%08X 0x%08X : AT(0x%06X) {\n"
-"      * (.text%08X);\n"
-"   }\n"
-"\n", ram_start, rom_start, rom_end, length,
-      ram_start, ram_start, rom_start, ram_start);
+                  "   /* 0x%08X %06X-%06X [%X] */\n"
+                  "   .text%08X 0x%08X : AT(0x%06X) {\n"
+                  "      * (.text%08X);\n"
+                  "   }\n"
+                  "\n", ram_start, rom_start, rom_end, length,
+                  ram_start, ram_start, rom_start, ram_start);
+      }
+      else if(s->type != TYPE_HEADER)
+      {
+         if (s->label == NULL || s->label[0] == '\0') {
+            fprintf(fld,
+                     "   /* 0x%08X %06X-%06X [%X] */\n"
+                     "   .data%08X 0x%08X : AT(0x%06X) {\n"
+                     "      build/%s/%s.%06X.%s%s.o(.data);\n"
+                     "   }\n"
+                     "\n", ram_start, rom_start, rom_end, length,
+                     rom_start, rom_start, rom_start, s->section_name,
+                     config->basename, s->start, s->label, s->section_name);
+         } else {
+            fprintf(fld,
+                     "   /* 0x%08X %06X-%06X [%X] */\n"
+                     "   .data%08X 0x%08X : AT(0x%06X) {\n"
+                     "      build/%s/%s.%06X.%s.o(.data);\n"
+                     "   }\n"
+                     "\n", ram_start, rom_start, rom_end, length,
+                     rom_start, rom_start, rom_start, s->section_name,
+                     config->basename, s->start, s->label);
+         }
       }
    }
    fprintf(fld,
@@ -417,6 +438,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    char outfilename[FILENAME_MAX];
    char outfilepath[FILENAME_MAX];
    char mio0filename[FILENAME_MAX];
+   char headerfilepath[FILENAME_MAX];
    char start_label[256];
    strbuf makeheader_mio0;
    strbuf makeheader_level;
@@ -510,32 +532,35 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
       switch (sec->type)
       {
          case TYPE_HEADER:
+            sprintf(headerfilepath, "%s/%s", asm_dir, "header.s");
+            FILE *header = fopen(headerfilepath, "w");
             INFO("Section header: %X-%X\n", sec->start, sec->end);
-            fprintf(fasm, ".section .header, \"a\"\n"
+            fprintf(header, ".section .header, \"a\"\n"
                           ".byte  0x%02X", data[sec->start]);
             for (i = 1; i < 4; i++) {
-               fprintf(fasm, ", 0x%02X", data[sec->start + i]);
+               fprintf(header, ", 0x%02X", data[sec->start + i]);
             }
-            fprintf(fasm, " # PI BSD Domain 1 register\n");
-            fprintf(fasm, ".word  0x%08X # clock rate setting\n", read_u32_be(&data[sec->start + 0x4]));
-            fprintf(fasm, ".word  0x%08X # entry point\n", read_u32_be(&data[sec->start + 0x8]));
-            fprintf(fasm, ".word  0x%08X # release\n", read_u32_be(&data[sec->start + 0xc]));
-            fprintf(fasm, ".word  0x%08X # checksum1\n", read_u32_be(&data[sec->start + 0x10]));
-            fprintf(fasm, ".word  0x%08X # checksum2\n", read_u32_be(&data[sec->start + 0x14]));
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x18]));
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x1C]));
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x20], 1, 20, fasm);
-            fprintf(fasm, "\" # ROM name: 20 bytes\n");
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x34]));
-            fprintf(fasm, ".word  0x%08X # cartridge\n", read_u32_be(&data[sec->start + 0x38]));
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x3C], 1, 2, fasm);
-            fprintf(fasm, "\"       # cartridge ID\n");
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x3E], 1, 1, fasm);
-            fprintf(fasm, "\"        # country\n");
-            fprintf(fasm, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
+            fprintf(header, " # PI BSD Domain 1 register\n");
+            fprintf(header, ".word  0x%08X # clock rate setting\n", read_u32_be(&data[sec->start + 0x4]));
+            fprintf(header, ".word  0x%08X # entry point\n", read_u32_be(&data[sec->start + 0x8]));
+            fprintf(header, ".word  0x%08X # release\n", read_u32_be(&data[sec->start + 0xc]));
+            fprintf(header, ".word  0x%08X # checksum1\n", read_u32_be(&data[sec->start + 0x10]));
+            fprintf(header, ".word  0x%08X # checksum2\n", read_u32_be(&data[sec->start + 0x14]));
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x18]));
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x1C]));
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x20], 1, 20, header);
+            fprintf(header, "\" # ROM name: 20 bytes\n");
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x34]));
+            fprintf(header, ".word  0x%08X # cartridge\n", read_u32_be(&data[sec->start + 0x38]));
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x3C], 1, 2, header);
+            fprintf(header, "\"       # cartridge ID\n");
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x3E], 1, 1, header);
+            fprintf(header, "\"        # country\n");
+            fprintf(header, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
+            fclose(header);
             break;
          case TYPE_BIN:
             write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
@@ -580,6 +605,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
 
             // Open seperate .s file for this section
             FILE *section_fasm = fopen(section_asmfilename, "w");
+            fprintf(section_fasm, "%s", asm_header);
             fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
             mipsdisasm_pass2(section_fasm, state, sec->start);
             fclose(section_fasm);
