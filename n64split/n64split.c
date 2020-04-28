@@ -326,10 +326,11 @@ void generate_ld_script(arg_config *args, rom_config *config)
          fprintf(fld,
                   "   /* 0x%08X %06X-%06X [%X] */\n"
                   "   .text%08X 0x%08X : AT(0x%06X) {\n"
-                  "      * (.text%08X);\n"
+                  "      build/%s/%s.o(.text%08X);\n"
                   "   }\n"
                   "\n", ram_start, rom_start, rom_end, length,
-                  ram_start, ram_start, rom_start, ram_start);
+                  ram_start, ram_start, rom_start, 
+                  s->section_name, s->label, ram_start);
       }
       else if(s->type != TYPE_HEADER)
       {
