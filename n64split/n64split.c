@@ -16,6 +16,7 @@ static const arg_config default_args =
    .large_texture_depth = 16,
    .keep_going = false,
    .merge_pseudo = false,
+   .skip_asm = false,
 };
 
 const char asm_header[] = 
@@ -604,12 +605,14 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             // Include in main .s file
             fprintf(fasm, ".include \"asm/%s.s\" \n", sec->label);
 
-            // Open seperate .s file for this section
-            FILE *section_fasm = fopen(section_asmfilename, "w");
-            fprintf(section_fasm, "%s", asm_header);
-            fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
-            mipsdisasm_pass2(section_fasm, state, sec->start);
-            fclose(section_fasm);
+            if (!args->skip_asm) {
+                // Open seperate .s file for this section
+                FILE *section_fasm = fopen(section_asmfilename, "w");
+                fprintf(section_fasm, "%s", asm_header);
+                fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
+                mipsdisasm_pass2(section_fasm, state, sec->start);
+                fclose(section_fasm);
+            }
             break;
          case TYPE_SM64_LEVEL:
             // relocate level scripts to .mio0 area
@@ -1175,6 +1178,9 @@ void parse_arguments(int argc, char *argv[], arg_config *config)
             case 'V':
                print_version();
                exit(0);
+               break;
+             case 'z':
+               config->skip_asm = true;
                break;
             default:
                print_usage();

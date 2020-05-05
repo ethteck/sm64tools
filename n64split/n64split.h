@@ -53,6 +53,7 @@ typedef struct _arg_config
    bool large_texture_depth;
    bool keep_going;
    bool merge_pseudo;
+   bool skip_asm;
 } arg_config;
 
 typedef enum {
