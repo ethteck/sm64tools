@@ -16,7 +16,7 @@ static const arg_config default_args =
    .large_texture_depth = 16,
    .keep_going = false,
    .merge_pseudo = false,
-   .skip_asm = false,
+   .bin_mode = false,
 };
 
 const char asm_header[] = 
@@ -605,7 +605,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             // Include in main .s file
             fprintf(fasm, ".include \"asm/%s.s\" \n", sec->label);
 
-            if (!args->skip_asm) {
+            if (!args->bin_mode) {
                 // Open seperate .s file for this section
                 FILE *section_fasm = fopen(section_asmfilename, "w");
                 fprintf(section_fasm, "%s", asm_header);
@@ -1093,7 +1093,9 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    //fprintf(fmake, collision_mtl_data);
    //fclose(fmake);
 
-   generate_ld_script(args, config);
+   if (!args->bin_mode) {
+       generate_ld_script(args, config);
+   }
    generate_geo_macros(args);
 }
 
@@ -1179,8 +1181,8 @@ void parse_arguments(int argc, char *argv[], arg_config *config)
                print_version();
                exit(0);
                break;
-             case 'z':
-               config->skip_asm = true;
+             case 'b':
+               config->bin_mode = true;
                break;
             default:
                print_usage();
