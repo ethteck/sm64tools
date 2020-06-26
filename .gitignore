@@ -18,3 +18,20 @@
 
 # Executables
 *.exe
+
+f3d
+f3d2obj
+mio0
+mio0.d
+mipsdisasm
+mipsdisasm.d
+n64cksum
+n64graphics
+n64graphics.d
+n64split
+obj/
+sm64compress
+sm64extend
+sm64geo
+sm64walk
+sm64walk.d
