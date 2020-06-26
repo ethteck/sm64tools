@@ -255,6 +255,13 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
             }
          }
 
+         // Converts `move` back into an `addu` instruction
+         if(insn[i].id == MIPS_INS_MOVE && insn[i].bytes[3] == 0x21) {
+            insn[i].id = MIPS_INS_ADDU;
+            strcpy(insn[i].mnemonic, "addu");
+            sprintf(insn[i].op_str, "%s, $zero", insn[i].op_str);
+         }
+         
          if (state->merge_pseudo) {
             switch (insn[i].id) {
                // find floating point LI
