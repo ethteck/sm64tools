@@ -55,6 +55,7 @@ typedef struct _split_section
    unsigned int end;
    unsigned int vaddr;
    section_type type;
+   char section_name[512];
 
    int subtype;
 

@@ -236,7 +236,10 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             switch (i) {
                case 0: section->start = strtoul(val, NULL, 0); break;
                case 1: section->end = strtoul(val, NULL, 0); break;
-               case 2: section->type = config_str2section(val); break;
+               case 2: 
+                  section->type = config_str2section(val); 
+                  strcpy(section->section_name, val);
+                  break;
                case 3: section->vaddr = strtoul(val, NULL, 0); break;
             }
          } else {

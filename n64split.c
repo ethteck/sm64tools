@@ -1272,18 +1272,42 @@ static void generate_ld_script(arg_config *args, rom_config *config)
 "\n", config->name, N64SPLIT_VERSION);
    for (int i = 0; i < config->section_count; i++) {
       split_section *s = &config->sections[i];
+      unsigned int rom_start = s->start;
+      unsigned int rom_end = s->end;
+      unsigned int ram_start = s->vaddr;
+      unsigned int length = rom_end - rom_start;
+      //fprintf(stdout, "section_name: %s, label: %s\n", s->section_name, s->label);
       if (s->type == TYPE_ASM) {
-         unsigned int rom_start = s->start;
-         unsigned int rom_end = s->end;
-         unsigned int ram_start = s->vaddr;
-         unsigned int length = rom_end - rom_start;
          fprintf(fld,
-"   /* 0x%08X %06X-%06X [%X] */\n"
-"   .text%08X 0x%08X : AT(0x%06X) {\n"
-"      * (.text%08X);\n"
-"   }\n"
-"\n", ram_start, rom_start, rom_end, length,
-      ram_start, ram_start, rom_start, ram_start);
+                  "   /* 0x%08X %06X-%06X [%X] */\n"
+                  "   .text%08X 0x%08X : AT(0x%06X) {\n"
+                  "      build/%s/%s.o(.text%08X);\n"
+                  "   }\n"
+                  "\n", ram_start, rom_start, rom_end, length,
+                  ram_start, ram_start, rom_start, 
+                  s->section_name, s->label, ram_start);
+      }
+      else if(s->type != TYPE_HEADER)
+      {
+         if (s->label == NULL || s->label[0] == '\0') {
+            fprintf(fld,
+                     "   /* 0x%08X %06X-%06X [%X] */\n"
+                     "   .data%08X 0x%08X : AT(0x%06X) {\n"
+                     "      build/%s/%s.%06X.o(.data);\n"
+                     "   }\n"
+                     "\n", ram_start, rom_start, rom_end, length,
+                     rom_start, rom_start, rom_start, s->section_name,
+                     config->basename, s->start);
+         } else {
+            fprintf(fld,
+                     "   /* 0x%08X %06X-%06X [%X] */\n"
+                     "   .data%08X 0x%08X : AT(0x%06X) {\n"
+                     "      build/%s/%s.%06X.%s.o(.data);\n"
+                     "   }\n"
+                     "\n", ram_start, rom_start, rom_end, length,
+                     rom_start, rom_start, rom_start, s->section_name,
+                     config->basename, s->start, s->label);
+         }
       }
    }
    fprintf(fld, 
@@ -1447,6 +1471,7 @@ int collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, 
 static void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
 {
 #define BIN_SUBDIR      "bin"
+#define ASM_SUBDIR      "asm"
 #define MIO0_SUBDIR     "bin"
 #define TEXTURE_SUBDIR  "textures"
 #define GEO_SUBDIR      "geo"
@@ -1455,6 +1480,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
 #define BEHAVIOR_SUBDIR "."
    char makefile_name[FILENAME_MAX];
    char bin_dir[FILENAME_MAX];
+   char asm_dir[FILENAME_MAX];
    char mio0_dir[FILENAME_MAX];
    char texture_dir[FILENAME_MAX];
    char geo_dir[FILENAME_MAX];
@@ -1465,11 +1491,11 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    char outfilename[FILENAME_MAX];
    char outfilepath[FILENAME_MAX];
    char mio0filename[FILENAME_MAX];
+   char headerfilepath[FILENAME_MAX];
    char start_label[256];
    strbuf makeheader_mio0;
    strbuf makeheader_level;
    strbuf makeheader_music;
-   FILE *fasm;
    FILE *fmake;
    int s;
    int i;
@@ -1482,6 +1508,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    // create directories
    sprintf(makefile_name, "%s/Makefile.split", args->output_dir);
    sprintf(bin_dir, "%s/%s", args->output_dir, BIN_SUBDIR);
+   sprintf(asm_dir, "%s/%s", args->output_dir, ASM_SUBDIR);
    sprintf(mio0_dir, "%s/%s", args->output_dir, MIO0_SUBDIR);
    sprintf(texture_dir, "%s/%s", args->output_dir, TEXTURE_SUBDIR);
    sprintf(geo_dir, "%s/%s", args->output_dir, GEO_SUBDIR);
@@ -1490,26 +1517,21 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    sprintf(behavior_dir, "%s/%s", args->output_dir, BEHAVIOR_SUBDIR);
    make_dir(args->output_dir);
    make_dir(bin_dir);
-   make_dir(mio0_dir);
-   make_dir(texture_dir);
-   make_dir(geo_dir);
-   make_dir(level_dir);
-   make_dir(model_dir);
-   make_dir(behavior_dir);
+   make_dir(asm_dir);
+   //make_dir(mio0_dir);
+   //make_dir(texture_dir);
+   //make_dir(geo_dir);
+   //make_dir(level_dir);
+   //make_dir(model_dir);
+   //make_dir(behavior_dir);
 
    // open main assembly file and write header
    sprintf(asmfilename, "%s/%s.s", args->output_dir, config->basename);
-   fasm = fopen(asmfilename, "w");
-   if (fasm == NULL) {
-      ERROR("Error opening %s\n", asmfilename);
-      exit(3);
-   }
-   fprintf(fasm, asm_header, config->name, N64SPLIT_VERSION);
 
    // generate globals include file
    generate_globals(args, config);
    // generate common macros
-   generate_macros(args);
+   // generate_macros(args);
 
    strbuf_alloc(&makeheader_music, 256);
    strbuf_sprintf(&makeheader_music, "MUSIC_FILES =");
@@ -1529,58 +1551,42 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
 
       // fill gaps between regions
       if (sec->start != prev_end) {
-         int gap_len = sec->start - prev_end;
-         INFO("Filling gap before region %d (%d bytes)\n", s, gap_len);
-         fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", prev_end, sec->start, gap_len);
-         // for small gaps, just output bytes
-         if (gap_len <= 0x80) {
-            unsigned int group_offset = prev_end;
-            while (gap_len > 0) {
-               int group_len = MIN(gap_len, 0x10);
-               fprintf(fasm, ".byte ");
-               fprint_hex_source(fasm, &data[group_offset], group_len);
-               fprintf(fasm, "\n");
-               gap_len -= group_len;
-               group_offset += group_len;
-            }
-         } else {
-            sprintf(outfilename, "%s/%s.%06X.bin", BIN_SUBDIR, config->basename, prev_end);
-            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
-            write_file(outfilepath, &data[prev_end], gap_len);
-            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
-         }
-         fprintf(fasm, "\n");
+         ERROR("Error: gap found: 0x%X, 0x%X\n", prev_end, sec->start);
+         exit(4);
       }
 
       switch (sec->type)
       {
          case TYPE_HEADER:
+            sprintf(headerfilepath, "%s/%s", asm_dir, "header.s");
+            FILE *header = fopen(headerfilepath, "w");
             INFO("Section header: %X-%X\n", sec->start, sec->end);
-            fprintf(fasm, ".section .header, \"a\"\n"
+            fprintf(header, ".section .header, \"a\"\n"
                           ".byte  0x%02X", data[sec->start]);
             for (i = 1; i < 4; i++) {
-               fprintf(fasm, ", 0x%02X", data[sec->start + i]);
+               fprintf(header, ", 0x%02X", data[sec->start + i]);
             }
-            fprintf(fasm, " # PI BSD Domain 1 register\n");
-            fprintf(fasm, ".word  0x%08X # clock rate setting\n", read_u32_be(&data[sec->start + 0x4]));
-            fprintf(fasm, ".word  0x%08X # entry point\n", read_u32_be(&data[sec->start + 0x8]));
-            fprintf(fasm, ".word  0x%08X # release\n", read_u32_be(&data[sec->start + 0xc]));
-            fprintf(fasm, ".word  0x%08X # checksum1\n", read_u32_be(&data[sec->start + 0x10]));
-            fprintf(fasm, ".word  0x%08X # checksum2\n", read_u32_be(&data[sec->start + 0x14]));
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x18]));
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x1C]));
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x20], 1, 20, fasm);
-            fprintf(fasm, "\" # ROM name: 20 bytes\n");
-            fprintf(fasm, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x34]));
-            fprintf(fasm, ".word  0x%08X # cartridge\n", read_u32_be(&data[sec->start + 0x38]));
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x3C], 1, 2, fasm);
-            fprintf(fasm, "\"       # cartridge ID\n");
-            fprintf(fasm, ".ascii \"");
-            fwrite(&data[sec->start + 0x3E], 1, 1, fasm);
-            fprintf(fasm, "\"        # country\n");
-            fprintf(fasm, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
+            fprintf(header, " # PI BSD Domain 1 register\n");
+            fprintf(header, ".word  0x%08X # clock rate setting\n", read_u32_be(&data[sec->start + 0x4]));
+            fprintf(header, ".word  0x%08X # entry point\n", read_u32_be(&data[sec->start + 0x8]));
+            fprintf(header, ".word  0x%08X # release\n", read_u32_be(&data[sec->start + 0xc]));
+            fprintf(header, ".word  0x%08X # checksum1\n", read_u32_be(&data[sec->start + 0x10]));
+            fprintf(header, ".word  0x%08X # checksum2\n", read_u32_be(&data[sec->start + 0x14]));
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x18]));
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x1C]));
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x20], 1, 20, header);
+            fprintf(header, "\" # ROM name: 20 bytes\n");
+            fprintf(header, ".word  0x%08X # unknown\n", read_u32_be(&data[sec->start + 0x34]));
+            fprintf(header, ".word  0x%08X # cartridge\n", read_u32_be(&data[sec->start + 0x38]));
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x3C], 1, 2, header);
+            fprintf(header, "\"       # cartridge ID\n");
+            fprintf(header, ".ascii \"");
+            fwrite(&data[sec->start + 0x3E], 1, 1, header);
+            fprintf(header, "\"        # country\n");
+            fprintf(header, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
+            fclose(header);
             break;
          case TYPE_BIN:
             if (sec->label == NULL || sec->label[0] == '\0') {
@@ -1595,72 +1601,19 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
             break;
          case TYPE_BLAST:
          case TYPE_MIO0:
          case TYPE_GZIP:
-         case TYPE_SM64_GEO:
-            // fill previous geometry and MIO0 blocks
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
-            break;
-         case TYPE_PTR:
-            INFO("Section ptr: %X-%X\n", sec->start, sec->end);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(start_label, "Ptr%06X", sec->start);
-            } else {
-               strcpy(start_label, sec->label);
-            }
-            fprintf(fasm, "%s:\n", start_label);
-            for (a = sec->start; a < sec->end; a += 4) {
-               ptr = read_u32_be(&data[a]);
-               disasm_label_lookup(state, ptr, start_label);
-               fprintf(fasm, ".word %s", start_label);
-               if (sec->child_count > 0) {
-                  for (i = 1; i < sec->child_count; i++) {
-                     a += 4;
-                     ptr = read_u32_be(&data[a]);
-                     disasm_label_lookup(state, ptr, start_label);
-                     fprintf(fasm, ", %s", start_label);
-                  }
-               }
-               fprintf(fasm, "\n");
-            }
-            fprintf(fasm, "\n");
-            break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
-            fprintf(fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
-            mipsdisasm_pass2(fasm, state, sec->start);
-            break;
-         case TYPE_SM64_LEVEL:
-            // relocate level scripts to .mio0 area
-            // TODO: these shouldn't need to be relocated if load offset can be computed
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
-            break;
-         case TYPE_SM64_BEHAVIOR:
-            // behaviors are done below
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
-            break;
-         case TYPE_M64:
-            parse_music_sequences(fasm, data, sec, args, &makeheader_music);
-            break;
-         case TYPE_SFX_CTL:
-            if (sfxSec == NULL)
-               sfxSec = sec;
-            else
-               parse_sound_banks(fasm, data, sec, sfxSec, args, &makeheader_music); //Fix header later
-            break;
-         case TYPE_SFX_TBL:
-            if (sfxSec == NULL)
-               sfxSec = sec;
-            else
-               parse_sound_banks(fasm, data, sfxSec, sec, args, &makeheader_music); //Fix header later
-            break;
-         case TYPE_INSTRUMENT_SET:
-            parse_instrument_set(fasm, data, sec);
+            char section_asmfilename[FILENAME_MAX];
+            sprintf(section_asmfilename, "%s/asm/%s.s", args->output_dir, sec->label);
+            FILE *section_fasm = fopen(section_asmfilename, "w");
+            fprintf(section_fasm, "%s", asm_header);
+            fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
+            mipsdisasm_pass2(section_fasm, state, sec->start);
+            fclose(section_fasm);
             break;
          default:
             ERROR("Don't know what to do with type %d\n", sec->type);
@@ -1685,42 +1638,9 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_SUBDIR);
    fprintf(fmake, "MUSIC_DIR = %s\n\n", MUSIC_SUBDIR);*/
 
-   fprintf(fasm, "\n.section .mio0\n");
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
-         case TYPE_SM64_GEO:
-         {
-            char geofilename[FILENAME_MAX];
-            FILE *fgeo;
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(geofilename, "%s.%06X.geo.s", config->basename, sec->start);
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               sprintf(geofilename, "%s.geo.s", sec->label);
-               strcpy(start_label, sec->label);
-            }
-            sprintf(outfilename, "%s/%s", GEO_SUBDIR, geofilename);
-            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
-
-            // decode and write level data out
-            fgeo = fopen(outfilepath, "w");
-            if (fgeo == NULL) {
-               perror(outfilepath);
-               exit(1);
-            }
-            write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, state);
-            fclose(fgeo);
-
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".include \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
-            // append to Makefile
-            strbuf_sprintf(&makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
-            break;
-         }
          case TYPE_BLAST:
          case TYPE_GZIP:
          case TYPE_MIO0:
@@ -1766,12 +1686,6 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             sprintf(binfilename, "%s/%s.bin", bin_dir, start_label);
             sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
             write_file(mio0filename, &data[sec->start], sec->end - sec->start);
-
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
 
             // append to Makefile
             strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
@@ -2075,7 +1989,6 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, "\n.include \"%s\"\n", outfilename);
             // append to Makefile
             strbuf_sprintf(&makeheader_level, " \\\n$(LEVEL_DIR)/%s", levelfilename);
             break;
@@ -2101,14 +2014,6 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             write_behavior(f_beh, data, config, s, state);
             fclose(f_beh);
 
-            fprintf(fasm, "\n.section .behavior, \"a\"\n");
-            fprintf(fasm, "\n.global %s\n", sec->label);
-            fprintf(fasm, ".global %s_end\n", sec->label);
-            fprintf(fasm, "%s:\n", sec->label);
-            fprintf(fasm, ".include \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", sec->label);
-            fprintf(fasm, "\n\n.section .mio0\n");
-
             // append to Makefile
             strbuf_sprintf(&makeheader_level, " \\\n%s/%s", BEHAVIOR_SUBDIR, beh_filename);
             break;
@@ -2126,7 +2031,6 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    strbuf_free(&makeheader_level);
    strbuf_free(&makeheader_music);
    //fclose(fmake);
-   fclose(fasm);
 
    // output top-level makefile
    /*sprintf(makefile_name, "%s/Makefile", args->output_dir);
