@@ -1280,12 +1280,12 @@ static void generate_ld_script(arg_config *args, rom_config *config)
       if (s->type == TYPE_ASM) {
          fprintf(fld,
                   "   /* 0x%08X %06X-%06X [%X] */\n"
-                  "   .text%08X 0x%08X : AT(0x%06X) {\n"
-                  "      build/%s/%s.o(.text%08X);\n"
+                  "   .text%08X_%s 0x%08X : AT(0x%06X) {\n"
+                  "      build/%s/%s.o(.text%08X_%s);\n"
                   "   }\n"
                   "\n", ram_start, rom_start, rom_end, length,
-                  ram_start, ram_start, rom_start, 
-                  s->section_name, s->label, ram_start);
+                  ram_start, s->label, ram_start, rom_start, 
+                  s->section_name, s->label, ram_start, s->label);
       }
       else if(s->type != TYPE_HEADER)
       {
@@ -1529,7 +1529,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    sprintf(asmfilename, "%s/%s.s", args->output_dir, config->basename);
 
    // generate globals include file
-   generate_globals(args, config);
+   // generate_globals(args, config);
    // generate common macros
    // generate_macros(args);
 
@@ -1611,7 +1611,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             sprintf(section_asmfilename, "%s/asm/%s.s", args->output_dir, sec->label);
             FILE *section_fasm = fopen(section_asmfilename, "w");
             fprintf(section_fasm, "%s", asm_header);
-            fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
+            fprintf(section_fasm, "\n.section .text%08X_%s, \"ax\"\n\n", sec->vaddr, sec->label);
             mipsdisasm_pass2(section_fasm, state, sec->start);
             fclose(section_fasm);
             break;
