@@ -389,11 +389,11 @@ void section_sm64_geo(unsigned char *data, arg_config *args, rom_config *config,
    write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, state);
    fclose(fgeo);
 
-   fprintf(fasm, "\n.align 4, 0x01\n");
-   fprintf(fasm, ".global %s\n", start_label);
-   fprintf(fasm, "%s:\n", start_label);
-   fprintf(fasm, ".include \"%s\"\n", outfilename);
-   fprintf(fasm, "%s_end:\n", start_label);
+   //(fasm, "\n.align 4, 0x01\n");
+   //fprintf(fasm, ".global %s\n", start_label);
+   //fprintf(fasm, "%s:\n", start_label);
+   //fprintf(fasm, ".include \"%s\"\n", outfilename);
+   //fprintf(fasm, "%s_end:\n", start_label);
    // append to Makefile
    strbuf_sprintf(makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
 }
@@ -419,9 +419,9 @@ void write_bin_type(split_section *sec, char* outfilename, char* start_label, FI
    } else {
       strcpy(start_label, sec->label);
    }
-   fprintf(fasm, "%s:\n", start_label);
-   fprintf(fasm, ".incbin \"%s\"\n", outfilename);
-   fprintf(fasm, "%s_end:\n", start_label);
+   //fprintf(fasm, "%s:\n", start_label);
+   //fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+   //fprintf(fasm, "%s_end:\n", start_label);
 }
 
 void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
@@ -445,7 +445,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    strbuf makeheader_mio0;
    strbuf makeheader_level;
    strbuf makeheader_music;
-   FILE *fasm;
+   //FILE *fasm;
    //FILE *fmake;
    int s;
    int i;
@@ -477,17 +477,13 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
 
    // open main assembly file and write header
    sprintf(asmfilename, "%s/%s.s", args->output_dir, config->basename);
-   fasm = fopen(asmfilename, "w");
-   if (fasm == NULL) {
-      ERROR("Error opening %s\n", asmfilename);
-      exit(3);
-   }
-   fprintf(fasm, asm_header, config->name, N64SPLIT_VERSION);
+   //fasm = fopen(asmfilename, "r");
+   //fprintf(fasm, asm_header, config->name, N64SPLIT_VERSION);
 
    // generate globals include file
-   generate_globals(args, config);
+   // generate_globals(args, config);
    // generate common macros
-   generate_macros(args);
+   // generate_macros(args);
 
    strbuf_alloc(&makeheader_music, 256);
    strbuf_sprintf(&makeheader_music, "MUSIC_FILES =");
@@ -509,15 +505,15 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
       if (sec->start != prev_end) {
          int gap_len = sec->start - prev_end;
          INFO("Filling gap before region %d (%d bytes)\n", s, gap_len);
-         fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", prev_end, sec->start, gap_len);
+         //fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", prev_end, sec->start, gap_len);
          // for small gaps, just output bytes
          if (gap_len <= 0x80) {
             unsigned int group_offset = prev_end;
             while (gap_len > 0) {
                int group_len = MIN(gap_len, 0x10);
-               fprintf(fasm, ".byte ");
-               fprint_hex_source(fasm, &data[group_offset], group_len);
-               fprintf(fasm, "\n");
+               //fprintf(fasm, ".byte ");
+               //fprint_hex_source(fasm, &data[group_offset], group_len);
+               //fprintf(fasm, "\n");
                gap_len -= group_len;
                group_offset += group_len;
             }
@@ -526,9 +522,9 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             sprintf(outfilename, "%s/%s.%06X.bin", BIN_SUBDIR, config->basename, prev_end);
             sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
             write_file(outfilepath, &data[prev_end], gap_len);
-            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+            //fprintf(fasm, ".incbin \"%s\"\n", outfilename);
          }
-         fprintf(fasm, "\n");
+         //fprintf(fasm, "\n");
       }
 
       switch (sec->type)
@@ -565,14 +561,14 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             fclose(header);
             break;
          case TYPE_BIN:
-            write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
+            write_bin_type(sec, outfilename, start_label, NULL, data, outfilepath, args, config);
             break;
          case TYPE_BLAST:
          case TYPE_MIO0:
          case TYPE_GZIP:
          case TYPE_SM64_GEO:
             // fill previous geometry and MIO0 blocks
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
+            //fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_PTR:
             INFO("Section ptr: %X-%X\n", sec->start, sec->end);
@@ -581,29 +577,29 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, "%s:\n", start_label);
+            //fprintf(fasm, "%s:\n", start_label);
             for (a = sec->start; a < sec->end; a += 4) {
                ptr = read_u32_be(&data[a]);
                disasm_label_lookup(state, ptr, start_label);
-               fprintf(fasm, ".word %s", start_label);
+               //fprintf(fasm, ".word %s", start_label);
                if (sec->child_count > 0) {
                   for (i = 1; i < sec->child_count; i++) {
                      a += 4;
                      ptr = read_u32_be(&data[a]);
                      disasm_label_lookup(state, ptr, start_label);
-                     fprintf(fasm, ", %s", start_label);
+                     //fprintf(fasm, ", %s", start_label);
                   }
                }
-               fprintf(fasm, "\n");
+               //fprintf(fasm, "\n");
             }
-            fprintf(fasm, "\n");
+            //fprintf(fasm, "\n");
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
             char section_asmfilename[FILENAME_MAX];
             sprintf(section_asmfilename, "%s/asm/%s.s", args->output_dir, sec->label);
             // Include in main .s file
-            fprintf(fasm, ".include \"asm/%s.s\" \n", sec->label);
+            //fprintf(fasm, ".include \"asm/%s.s\" \n", sec->label);
 
             if (!args->bin_mode) {
                 // Open seperate .s file for this section
@@ -617,34 +613,34 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
          case TYPE_SM64_LEVEL:
             // relocate level scripts to .mio0 area
             // TODO: these shouldn't need to be relocated if load offset can be computed
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
+            //fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_SM64_BEHAVIOR:
             // behaviors are done below
-            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
+            //fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_M64:
-            parse_music_sequences(fasm, data, sec, args, &makeheader_music);
+            parse_music_sequences(NULL, data, sec, args, &makeheader_music);
             break;
          case TYPE_SFX_CTL:
             if (sfxSec == NULL)
                sfxSec = sec;
             else
-               parse_sound_banks(fasm, data, sec, sfxSec, args, &makeheader_music); //Fix header later
+               parse_sound_banks(NULL, data, sec, sfxSec, args, &makeheader_music); //Fix header later
             break;
          case TYPE_SFX_TBL:
             if (sfxSec == NULL)
                sfxSec = sec;
             else
-               parse_sound_banks(fasm, data, sfxSec, sec, args, &makeheader_music); //Fix header later
+               parse_sound_banks(NULL, data, sfxSec, sec, args, &makeheader_music); //Fix header later
             break;
          case TYPE_INSTRUMENT_SET:
-            parse_instrument_set(fasm, data, sec);
+            parse_instrument_set(NULL, data, sec);
             break;
          default:
             // printf("Treating custom file format as binary %s %s %s\n", sec->section_name, outfilepath, outfilename);
             // ERROR("Don't know what to do with type %d\n", sec->type);
-            write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
+            write_bin_type(sec, outfilename, start_label, NULL, data, outfilepath, args, config);
             break;
       }
       prev_end = sec->end;
@@ -665,13 +661,13 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    //fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_SUBDIR);
    //fprintf(fmake, "MUSIC_DIR = %s\n\n", MUSIC_SUBDIR);
 
-   fprintf(fasm, "\n.section .mio0\n");
+   //fprintf(fasm, "\n.section .mio0\n");
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
          case TYPE_SM64_GEO:
          {
-            section_sm64_geo(data, args, config, state, sec, start_label, outfilename, outfilepath, fasm, &makeheader_level);
+            section_sm64_geo(data, args, config, state, sec, start_label, outfilename, outfilepath, NULL, &makeheader_level);
             break;
          }
          case TYPE_BLAST:
@@ -720,11 +716,11 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
             write_file(mio0filename, &data[sec->start], sec->end - sec->start);
 
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
+            //fprintf(fasm, "\n.align 4, 0x01\n");
+            //fprintf(fasm, ".global %s\n", start_label);
+            //fprintf(fasm, "%s:\n", start_label);
+            //fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
+            //fprintf(fasm, "%s_end:\n", start_label);
 
             // append to Makefile
             strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
@@ -1028,7 +1024,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, "\n.include \"%s\"\n", outfilename);
+            //fprintf(fasm, "\n.include \"%s\"\n", outfilename);
             // append to Makefile
             strbuf_sprintf(&makeheader_level, " \\\n$(LEVEL_DIR)/%s", levelfilename);
             break;
@@ -1054,13 +1050,13 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
             write_behavior(f_beh, data, config, s, state);
             fclose(f_beh);
 
-            fprintf(fasm, "\n.section .behavior, \"a\"\n");
-            fprintf(fasm, "\n.global %s\n", sec->label);
-            fprintf(fasm, ".global %s_end\n", sec->label);
-            fprintf(fasm, "%s:\n", sec->label);
-            fprintf(fasm, ".include \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", sec->label);
-            fprintf(fasm, "\n\n.section .mio0\n");
+            //fprintf(fasm, "\n.section .behavior, \"a\"\n");
+            //fprintf(fasm, "\n.global %s\n", sec->label);
+            //fprintf(fasm, ".global %s_end\n", sec->label);
+            //fprintf(fasm, "%s:\n", sec->label);
+            //fprintf(fasm, ".include \"%s\"\n", outfilename);
+            //fprintf(fasm, "%s_end:\n", sec->label);
+            //fprintf(fasm, "\n\n.section .mio0\n");
 
             // append to Makefile
             strbuf_sprintf(&makeheader_level, " \\\n%s/%s", BEHAVIOR_SUBDIR, beh_filename);
@@ -1079,7 +1075,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    strbuf_free(&makeheader_level);
    strbuf_free(&makeheader_music);
    //fclose(fmake);
-   fclose(fasm);
+   //fclose(fasm);
 
    // output top-level makefile
    //sprintf(makefile_name, "%s/Makefile", args->output_dir);
@@ -1096,7 +1092,7 @@ void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_
    if (!args->bin_mode) {
        generate_ld_script(args, config);
    }
-   generate_geo_macros(args);
+   // generate_geo_macros(args);
 }
 
 void print_usage(void)
